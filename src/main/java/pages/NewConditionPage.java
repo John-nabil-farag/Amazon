@@ -10,7 +10,6 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.ArrayList;
 
 public class NewConditionPage {
     private WebDriver driver;
@@ -35,11 +34,12 @@ public class NewConditionPage {
         select.selectByVisibleText("Price: High to Low");
     }
 
+    // Method to find and add products below 15K EGP to the cart
     public void productsBelow_15K() throws InterruptedException {
         boolean hasNextPage = true;
+        boolean productAdded = false;
         int priceThreshold = 15000;
 
-        boolean productAdded = false;
         while (hasNextPage) {
             // Get list of all products on the page
             List<WebElement> products = driver.findElements(By.cssSelector(".s-main-slot .s-result-item"));
@@ -47,54 +47,60 @@ public class NewConditionPage {
             // Track if any product is added to cart (below 15k EGP)
             productAdded = false;
 
+            // Loop through each product
             for (WebElement product : products) {
-                // Locate price element
-                WebElement priceElement = product.findElement(By.className("a-price-whole"));
+                try {
+                    // Locate price element, checking if it exists
+                    List<WebElement> priceElements = product.findElements(By.cssSelector(".a-price-whole"));
 
-                WebElement item = wait.until(ExpectedConditions.visibilityOfElementLocated((By) product));
-                wait.until(ExpectedConditions.elementToBeClickable(product));
-                // Scroll to the element if necessary
-                ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", item);
+                    WebElement nextElement = wait.until(ExpectedConditions.visibilityOf(product));
+                    wait.until(ExpectedConditions.elementToBeClickable(product));
+                    ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", nextElement);
 
-                String priceText = priceElement.getText().replace(",", "");  // Remove commas for proper parsing
-                double price = Double.parseDouble(priceText);
+                    // Skip if price is not found for the product
+                    if (priceElements.isEmpty()) {
+                        System.out.println("No price available for this product, skipping...");
+                        continue;
+                    }
 
-                // If price is below 15,000 EGP, add to cart
-                if (price < priceThreshold) {
-                    // Find and click the 'Add to Cart' button
-                    WebElement addToCartButton = product.findElement(By.cssSelector(".a-button-inner input[type='submit']"));
-                    addToCartButton.click();
+                    WebElement priceElement = priceElements.get(0);  // Get the first price element
+                    String priceText = priceElement.getText().replace(",", "");  // Remove commas
 
-                    // Wait for cart confirmation (can be improved with WebDriverWait)
-                    Thread.sleep(2000);
+                    // Parse the price as double
+                    double price = Double.parseDouble(priceText);
 
-                    System.out.println("Added product to cart with price: " + priceText + " EGP");
-                    productAdded = true;
+                    // Check if the product price is below the threshold
+                    if (price < priceThreshold) {
+                        WebElement addToCartButton = product.findElement(By.cssSelector(".a-button-inner input[type='submit']"));
+                        addToCartButton.click();
+                        Thread.sleep(2000);  // Wait for cart confirmation
+
+                        System.out.println("Added product to cart with price: " + priceText + " EGP");
+                        productAdded = true;
+                    }
+                } catch (Exception e) {
+                    // Handle cases where price or add to cart button is not found
+                    System.out.println("Error processing product: " + e.getMessage());
                 }
             }
-        }
 
-        // Check if there are no products below 15k on the current page
-        if (!productAdded) {
-            try {
-                // Find the "Next" page button and navigate if it's enabled
-                WebElement nextPageButton = driver.findElement(By.cssSelector(".s-pagination-next"));
-                WebElement nextPage = wait.until(ExpectedConditions.visibilityOfElementLocated((By) nextPageButton));
-                wait.until(ExpectedConditions.elementToBeClickable(nextPageButton));
-                // Scroll to the element if necessary
-                ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", nextPage);
-                if (nextPageButton.isEnabled()) {
-                    nextPageButton.click();
-                    Thread.sleep(3000);  // Wait for the next page to load
-                } else {
-                    hasNextPage = false;  // Exit loop if no next page
+            // If no products below 15K EGP were added on this page, try to navigate to the next page
+            if (!productAdded) {
+                try {
+                    WebElement nextPageButton = driver.findElement(By.cssSelector(".s-pagination-next"));
+                    if (nextPageButton.isEnabled()) {
+                        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", nextPageButton);
+                        nextPageButton.click();
+                        Thread.sleep(3000);  // Wait for the next page to load
+                    } else {
+                        hasNextPage = false;  // No more pages to navigate
+                    }
+                } catch (Exception e) {
+                    // If there's no "Next" button, break the loop
+                    System.out.println("No more pages available: " + e.getMessage());
+                    hasNextPage = false;
                 }
-            } catch (Exception e) {
-                // If no next page button is found, exit the loop
-                hasNextPage = false;
-                System.out.println("No more pages available: " + e.getMessage());
             }
-
         }
     }
 }
